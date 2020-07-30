@@ -72,7 +72,11 @@ def convertLabel(datasetLabel):
     to convert them to another representation in this function.
     Consider regression vs classification.
     """
-    return datasetLabel
+    # Convert to longTensor (i.e. int)
+    convertedLabel = datasetLabel.type(torch.LongTensor)
+    # Subtract 1 for classifier target values 0-4
+    convertedLabel = torch.add(convertedLabel, -1)
+    return convertedLabel
 
 def convertNetOutput(netOutput):
     """
@@ -82,6 +86,8 @@ def convertNetOutput(netOutput):
     If your network outputs a different representation or any float
     values other than the five mentioned, convert the output here.
     """
+    # Find index of max response
+    netOutput = netOutput.argmax(dim=1, keepdim=True)
     return netOutput
 
 ###########################################################################
@@ -129,7 +135,7 @@ class LSTMBasedNetwork(tnn.Module):
         # Take the last hidden state to put in the linear layer
         output = self.fully_connected(output[:, -1, :])
         # Take sigmoid of the output
-        output = torch.sigmoid(output)
+        output = tnn.functional.log_softmax(output, dim=1)
         return output
 
 class loss(tnn.Module):
