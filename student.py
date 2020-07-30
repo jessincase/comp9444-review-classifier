@@ -18,7 +18,7 @@ The variable device may be used to refer to the CPU/GPU being used by PyTorch.
 You may only use GloVe 6B word vectors as found in the torchtext package.
 """
 
-# import torch
+import torch
 import torch.nn as tnn
 import torch.optim as toptim
 from torchtext.vocab import GloVe
@@ -44,6 +44,8 @@ def postprocessing(batch, vocab):
     return batch
 
 # Stop words are words which we want to remove from our input reviews
+stopWords = {}
+"""
 # For example, these are from the python NLTK library
 stopWords = {'i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you', 'your', 'yours', 'yourself',
              'yourselves', 'he', 'him', 'his', 'himself', 'she', 'her', 'hers', 'herself', 'it', 'its', 'itself',
@@ -55,6 +57,7 @@ stopWords = {'i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you',
              'then', 'once', 'here', 'there', 'when', 'where', 'why', 'how', 'all', 'any', 'both', 'each', 'few', 'more',
              'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very', 's',
              't', 'can', 'will', 'just', 'don', 'should', 'now'}
+"""
 wordVectors = GloVe(name='6B', dim=50)
 
 ###########################################################################
@@ -69,7 +72,6 @@ def convertLabel(datasetLabel):
     to convert them to another representation in this function.
     Consider regression vs classification.
     """
-
     return datasetLabel
 
 def convertNetOutput(netOutput):
@@ -80,7 +82,6 @@ def convertNetOutput(netOutput):
     If your network outputs a different representation or any float
     values other than the five mentioned, convert the output here.
     """
-
     return netOutput
 
 ###########################################################################
@@ -101,6 +102,36 @@ class network(tnn.Module):
     def forward(self, input, length):
         pass
 
+# Could also try a bi-directional LSTM
+class LSTMBasedNetwork(tnn.Module):
+    # Two fully connected ReLU layers followed by log softmax
+    def __init__(self):
+        super(LSTMBasedNetwork, self).__init__()
+        # Define parameters
+        # Input size is equivalent to the GloVe dimension
+        self.input_size = 50
+        self.num_layers = 2
+        self.hidden_size = 128
+        self.num_classes = 5
+        # Define network components
+        self.lstm = tnn.LSTM(self.input_size, self.hidden_size, self.num_layers,
+                            batch_first=True)
+        self.fully_connected = tnn.Linear(self.hidden_size, self.num_classes)
+
+    def forward(self, input, length):
+        # Input is of shape (batchSize, maxLengthInBatch, wordEmbeddingDim)
+        # length provides the 'true' length of the sentence
+        # Initialise the hidden and cell state
+        h0 = torch.zeros(self.num_layers, input.shape[0], self.hidden_size).to(device)
+        c0 = torch.zeros(self.num_layers, input.shape[0], self.hidden_size).to(device)
+        # Run the model
+        output, _ = self.lstm(input, (h0, c0))
+        # Take the last hidden state to put in the linear layer
+        output = self.fully_connected(output[:, -1, :])
+        # Take sigmoid of the output
+        output = torch.sigmoid(output)
+        return output
+
 class loss(tnn.Module):
     """
     Class for creating a custom loss function, if desired.
@@ -113,12 +144,13 @@ class loss(tnn.Module):
     def forward(self, output, target):
         pass
 
-net = network()
+# Define the network to be used
+net = LSTMBasedNetwork()
 """
     Loss function for the model. You may use loss functions found in
     the torch package, or create your own with the loss class above.
 """
-lossFunc = loss()
+lossFunc = tnn.NLLLoss()
 
 ###########################################################################
 ################ The following determines training options ################
@@ -127,4 +159,5 @@ lossFunc = loss()
 trainValSplit = 0.8
 batchSize = 32
 epochs = 10
-optimiser = toptim.SGD(net.parameters(), lr=0.01)
+# Use Adam optimiser
+optimiser = toptim.Adam(net.parameters(), lr=0.01)

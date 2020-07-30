@@ -68,6 +68,8 @@ def main():
 
             # Forward pass through the network.
             output = net(inputs, length)
+            print(output)
+            print(labels)
             loss = criterion(output, student.convertLabel(labels))
 
             # Calculate gradients.
