@@ -44,8 +44,7 @@ def postprocessing(batch, vocab):
     return batch
 
 # Stop words are words which we want to remove from our input reviews
-stopWords = {}
-"""
+#stopWords = {}
 # For example, these are from the python NLTK library
 stopWords = {'i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you', 'your', 'yours', 'yourself',
              'yourselves', 'he', 'him', 'his', 'himself', 'she', 'her', 'hers', 'herself', 'it', 'its', 'itself',
@@ -57,7 +56,7 @@ stopWords = {'i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you',
              'then', 'once', 'here', 'there', 'when', 'where', 'why', 'how', 'all', 'any', 'both', 'each', 'few', 'more',
              'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very', 's',
              't', 'can', 'will', 'just', 'don', 'should', 'now'}
-"""
+
 wordVectors = GloVe(name='6B', dim=50)
 
 ###########################################################################
@@ -86,8 +85,10 @@ def convertNetOutput(netOutput):
     If your network outputs a different representation or any float
     values other than the five mentioned, convert the output here.
     """
-    # Find index of max response
+    # Find index of max response, gives values 0-4
     netOutput = netOutput.argmax(dim=1, keepdim=True)
+    # Add one to get back to 1-5 range
+    netOutput = torch.add(netOutput, 1)
     return netOutput
 
 ###########################################################################
@@ -134,7 +135,7 @@ class LSTMBasedNetwork(tnn.Module):
         output, _ = self.lstm(input, (h0, c0))
         # Take the last hidden state to put in the linear layer
         output = self.fully_connected(output[:, -1, :])
-        # Take sigmoid of the output
+        # Take log(softmax) of the output
         output = tnn.functional.log_softmax(output, dim=1)
         return output
 
@@ -165,5 +166,5 @@ lossFunc = tnn.NLLLoss()
 trainValSplit = 0.8
 batchSize = 32
 epochs = 10
-# Use Adam optimiser
-optimiser = toptim.Adam(net.parameters(), lr=0.01)
+# Use SGD optimiser
+optimiser = toptim.SGD(net.parameters(), lr=0.01)
