@@ -44,8 +44,9 @@ def postprocessing(batch, vocab):
     return batch
 
 # Stop words are words which we want to remove from our input reviews
-#stopWords = {}
+stopWords = {}
 # For example, these are from the python NLTK library
+'''
 stopWords = {'i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you', 'your', 'yours', 'yourself',
              'yourselves', 'he', 'him', 'his', 'himself', 'she', 'her', 'hers', 'herself', 'it', 'its', 'itself',
              'they', 'them', 'their', 'theirs', 'themselves', 'what', 'which', 'who', 'whom', 'this', 'that',
@@ -56,6 +57,7 @@ stopWords = {'i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you',
              'then', 'once', 'here', 'there', 'when', 'where', 'why', 'how', 'all', 'any', 'both', 'each', 'few', 'more',
              'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very', 's',
              't', 'can', 'will', 'just', 'don', 'should', 'now'}
+'''
 
 wordVectors = GloVe(name='6B', dim=50)
 
@@ -109,16 +111,14 @@ class network(tnn.Module):
     def forward(self, input, length):
         pass
 
-# Could also try a bi-directional LSTM
 class LSTMBasedNetwork(tnn.Module):
-    # Two fully connected ReLU layers followed by log softmax
     def __init__(self):
         super(LSTMBasedNetwork, self).__init__()
         # Define parameters
         # Input size is equivalent to the GloVe dimension
         self.input_size = 50
         self.num_layers = 2
-        self.hidden_size = 128
+        self.hidden_size = 256
         self.num_classes = 5
         # Define network components
         self.lstm = tnn.LSTM(self.input_size, self.hidden_size, self.num_layers,
@@ -131,6 +131,35 @@ class LSTMBasedNetwork(tnn.Module):
         # Initialise the hidden and cell state
         h0 = torch.zeros(self.num_layers, input.shape[0], self.hidden_size).to(device)
         c0 = torch.zeros(self.num_layers, input.shape[0], self.hidden_size).to(device)
+        # Run the model
+        output, _ = self.lstm(input, (h0, c0))
+        # Take the last hidden state to put in the linear layer
+        output = self.fully_connected(output[:, -1, :])
+        # Take log(softmax) of the output
+        output = tnn.functional.log_softmax(output, dim=1)
+        return output
+
+# Bi-directional LSTM
+class BRNN(tnn.Module):
+    def __init__(self):
+        super(BRNN, self).__init__()
+        # Define parameters
+        # Input size is equivalent to the GloVe dimension
+        self.input_size = 50
+        self.num_layers = 2
+        self.hidden_size = 128
+        self.num_classes = 5
+        # Define network components
+        self.lstm = tnn.LSTM(self.input_size, self.hidden_size, self.num_layers,
+                            batch_first=True, bidirectional=True)
+        self.fully_connected = tnn.Linear(self.hidden_size*2, self.num_classes)
+
+    def forward(self, input, length):
+        # Input is of shape (batchSize, maxLengthInBatch, wordEmbeddingDim)
+        # length provides the 'true' length of the sentence
+        # Initialise the hidden and cell state
+        h0 = torch.zeros(self.num_layers*2, input.shape[0], self.hidden_size).to(device)
+        c0 = torch.zeros(self.num_layers*2, input.shape[0], self.hidden_size).to(device)
         # Run the model
         output, _ = self.lstm(input, (h0, c0))
         # Take the last hidden state to put in the linear layer
@@ -152,19 +181,20 @@ class loss(tnn.Module):
         pass
 
 # Define the network to be used
-net = LSTMBasedNetwork()
+net = BRNN()
 """
     Loss function for the model. You may use loss functions found in
     the torch package, or create your own with the loss class above.
 """
-lossFunc = tnn.NLLLoss()
+lossFunc = tnn.CrossEntropyLoss()
 
 ###########################################################################
 ################ The following determines training options ################
 ###########################################################################
 
 trainValSplit = 0.8
-batchSize = 32
+batchSize = 64
 epochs = 10
-# Use SGD optimiser
-optimiser = toptim.SGD(net.parameters(), lr=0.01)
+# Use optimiser
+lr = 0.01
+optimiser = toptim.Adam(net.parameters(),lr=lr)
