@@ -88,9 +88,16 @@ def convertNetOutput(netOutput):
     values other than the five mentioned, convert the output here.
     """
     # Find index of max response, gives values 0-4
-    netOutput = netOutput.argmax(dim=1, keepdim=True)
+    threshold = 0.5
+    copy = netOutput.argmax(dim=1, keepdim=True)
+    for index, output in enumerate(netOutput):
+        print(output)
+        for i, o in enumerate(output.unsqueeze(dim=1)):
+            if o < threshold:
+                copy[index] = i
+    
     # Add one to get back to 1-5 range
-    netOutput = torch.add(netOutput, 1)
+    netOutput = torch.add(copy, 1)
     return netOutput
 
 ###########################################################################
@@ -142,7 +149,9 @@ class LSTMBasedNetwork(tnn.Module):
         # Pass hidden states to fully connected layer
         output = self.fully_connected(state_out)
         # Take log(softmax) of the output
-        output = tnn.functional.log_softmax(output, dim=1)
+        # output = tnn.functional.log_softmax(output, dim=1)
+
+        output = torch.sigmoid(output)
         return output
 
 # Bi-directional LSTM
@@ -177,20 +186,73 @@ class BRNN(tnn.Module):
         # Pass hidden states to fully connected layer
         output = self.fully_connected(state_out)
         # Take log(softmax) of the output
-        output = tnn.functional.log_softmax(output, dim=1)
+        # output = tnn.functional.log_softmax(output, dim=1)
+
+        # Take sigmoid of the output
+        output = tnn.functional.sigmoid(output)
+        # print(output)
         return output
 
-class loss(tnn.Module):
+class RelativeEntropyLoss(tnn.Module):
     """
     Class for creating a custom loss function, if desired.
     You may remove/comment out this class if you are not using it.
     """
 
     def __init__(self):
-        super(loss, self).__init__()
+        super(RelativeEntropyLoss, self).__init__()
 
-    def forward(self, output, target):
-        pass
+    def forward(self, output, targets):
+        # target vector = []
+        losses = torch.zeros(batchSize)
+        for index, item in enumerate(output):
+            # item = [ P(C1), P(C2), P(C3), P(C4), P(C5) ]
+            num_classes = len(item)
+            target_vector = [0 for x in range(num_classes)]
+            target = targets[index]
+            for i in range(target):
+                target_vector[i] = 1
+            
+            loss = 0
+            for i, c in enumerate(item):
+                t_i = target_vector[i]
+                loss += t_i*torch.log(c) + (1-t_i)*torch.log(1-c)
+
+            losses[index] = loss
+        
+        # print(losses)
+        return torch.mean(losses)
+
+class SquareErrorLoss(tnn.Module):
+    """
+    Class for creating a custom loss function, if desired.
+    You may remove/comment out this class if you are not using it.
+    """
+
+    def __init__(self):
+        super(SquareErrorLoss, self).__init__()
+
+    def forward(self, output, targets):
+        # Initialise losses
+        losses = torch.zeros(batchSize)
+
+        for index, item in enumerate(output):
+            # item = [ P(C1), P(C2), P(C3), P(C4), P(C5) ]
+            num_classes = len(item)
+            target_vector = [0 for x in range(num_classes)]
+            target = targets[index]
+            for i in range(target):
+                target_vector[i] = 1
+            
+            loss = 0
+            for i, c in enumerate(item):
+                t_i = target_vector[i]
+                loss += (t_i - c)*(t_i - c)
+
+            losses[index] = loss
+        
+        return torch.mean(losses)
+
 
 # Define the network to be used
 net = LSTMBasedNetwork()
@@ -198,7 +260,7 @@ net = LSTMBasedNetwork()
     Loss function for the model. You may use loss functions found in
     the torch package, or create your own with the loss class above.
 """
-lossFunc = tnn.CrossEntropyLoss()
+lossFunc = SquareErrorLoss()
 
 ###########################################################################
 ################ The following determines training options ################
