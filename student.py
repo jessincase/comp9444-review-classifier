@@ -118,7 +118,7 @@ class LSTMBasedNetwork(tnn.Module):
         # Input size is equivalent to the GloVe dimension
         self.input_size = 50
         self.num_layers = 2
-        self.hidden_size = 256
+        self.hidden_size = 128
         self.num_classes = 5
         # Define network components
         self.lstm = tnn.LSTM(self.input_size, self.hidden_size, self.num_layers,
@@ -133,8 +133,14 @@ class LSTMBasedNetwork(tnn.Module):
         c0 = torch.zeros(self.num_layers, input.shape[0], self.hidden_size).to(device)
         # Run the model
         output, _ = self.lstm(input, (h0, c0))
-        # Take the last hidden state to put in the linear layer
-        output = self.fully_connected(output[:, -1, :])
+        # Take the hidden state based on the true length of the sentences
+        # Initialise tensor with zeros
+        state_out = torch.zeros(input.shape[0], self.hidden_size)
+        # Loop through output of lstm and take the hidden state corresponding to the true length
+        for index in range(input.shape[0]):
+            state_out[index, :] = output[index, length[index] -1,:]
+        # Pass hidden states to fully connected layer
+        output = self.fully_connected(state_out)
         # Take log(softmax) of the output
         output = tnn.functional.log_softmax(output, dim=1)
         return output
@@ -147,7 +153,7 @@ class BRNN(tnn.Module):
         # Input size is equivalent to the GloVe dimension
         self.input_size = 50
         self.num_layers = 2
-        self.hidden_size = 128
+        self.hidden_size = 256
         self.num_classes = 5
         # Define network components
         self.lstm = tnn.LSTM(self.input_size, self.hidden_size, self.num_layers,
@@ -162,8 +168,14 @@ class BRNN(tnn.Module):
         c0 = torch.zeros(self.num_layers*2, input.shape[0], self.hidden_size).to(device)
         # Run the model
         output, _ = self.lstm(input, (h0, c0))
-        # Take the last hidden state to put in the linear layer
-        output = self.fully_connected(output[:, -1, :])
+        # Take the hidden state based on the true length of the sentences
+        # Initialise tensor with zeros
+        state_out = torch.zeros(input.shape[0], self.hidden_size)
+        # Loop through output of lstm and take the hidden state corresponding to the true length
+        for index in range(input.shape[0]):
+            state_out[index, :] = output[index, length[index] -1,:]
+        # Pass hidden states to fully connected layer
+        output = self.fully_connected(state_out)
         # Take log(softmax) of the output
         output = tnn.functional.log_softmax(output, dim=1)
         return output
@@ -181,7 +193,7 @@ class loss(tnn.Module):
         pass
 
 # Define the network to be used
-net = BRNN()
+net = LSTMBasedNetwork()
 """
     Loss function for the model. You may use loss functions found in
     the torch package, or create your own with the loss class above.
@@ -192,9 +204,11 @@ lossFunc = tnn.CrossEntropyLoss()
 ################ The following determines training options ################
 ###########################################################################
 
-trainValSplit = 0.8
+trainValSplit = 0.5
 batchSize = 64
 epochs = 10
 # Use optimiser
 lr = 0.01
-optimiser = toptim.Adam(net.parameters(),lr=lr)
+mom = 0.1
+# optimiser = toptim.Adam(net.parameters(),lr=lr)
+optimiser = toptim.SGD(net.parameters(), lr=lr, momentum=mom)
