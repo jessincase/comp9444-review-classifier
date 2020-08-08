@@ -84,7 +84,8 @@ def main():
                 runningLoss = 0
 
     # Save model.
-    torch.save(net.state_dict(), 'savedModel.pth')
+    #torch.save(net.state_dict(), 'savedModel.pth')
+    torch.save(net.state_dict(), 'savedModel.pth', _use_new_zipfile_serialization=False)
     print("\n"
           "Model saved to savedModel.pth")
 
@@ -102,7 +103,6 @@ def main():
 
                 # Convert network output to integer values.
                 outputs = student.convertNetOutput(net(inputs, length)).flatten()
-
                 for i in range(5):
                     closeness[i] += torch.sum(abs(labels - outputs) == i).item()
 
