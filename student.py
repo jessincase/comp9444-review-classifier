@@ -59,7 +59,7 @@ stopWords = {'i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you',
              't', 'can', 'will', 'just', 'don', 'should', 'now'}
 '''
 
-wordVectors = GloVe(name='6B', dim=50)
+wordVectors = GloVe(name='6B', dim=300)
 
 ###########################################################################
 ##### The following determines the processing of label data (ratings) #####
@@ -91,6 +91,8 @@ def convertNetOutput(netOutput):
     netOutput = netOutput.argmax(dim=1, keepdim=True)
     # Add one to get back to 1-5 range
     netOutput = torch.add(netOutput, 1)
+    # Convert to float
+    netOutput = netOutput.float()
     return netOutput
 
 ###########################################################################
@@ -111,12 +113,13 @@ class network(tnn.Module):
     def forward(self, input, length):
         pass
 
+# Basic LSTM
 class LSTMBasedNetwork(tnn.Module):
     def __init__(self):
         super(LSTMBasedNetwork, self).__init__()
         # Define parameters
         # Input size is equivalent to the GloVe dimension
-        self.input_size = 50
+        self.input_size = 300
         self.num_layers = 2
         self.hidden_size = 128
         self.num_classes = 5
@@ -204,11 +207,11 @@ lossFunc = tnn.CrossEntropyLoss()
 ################ The following determines training options ################
 ###########################################################################
 
-trainValSplit = 0.5
+trainValSplit = 0.8
 batchSize = 64
 epochs = 10
 # Use optimiser
-lr = 0.01
-mom = 0.1
+lr = 1.1
+mom = 0.8
 # optimiser = toptim.Adam(net.parameters(),lr=lr)
 optimiser = toptim.SGD(net.parameters(), lr=lr, momentum=mom)
