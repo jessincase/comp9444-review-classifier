@@ -43,8 +43,6 @@ import torch
 import torch.nn as tnn
 import torch.optim as toptim
 from torchtext.vocab import GloVe
-# import numpy as np
-# import sklearn
 
 ###########################################################################
 ### The following determines the processing of input data (review text) ###
