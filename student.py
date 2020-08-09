@@ -77,7 +77,13 @@ def convertLabel(datasetLabel):
     convertedLabel = datasetLabel.type(torch.LongTensor)
     # Subtract 1 for classifier target values 0-4
     convertedLabel = torch.add(convertedLabel, -1)
-    return convertedLabel
+    # Create Tensor as one-hot encoding (makes it easier to do MSE)
+    oneHot = torch.zeros(convertedLabel.shape[0], 5)
+    for index in range(oneHot.shape[0]):
+        oneHot[index, convertedLabel[index]] = 1
+    #return convertedLabel # goes 0 to 4
+    return oneHot # one hot encoding
+    #return datasetLabel # goes 1 to 5
 
 def convertNetOutput(netOutput):
     """
@@ -145,7 +151,7 @@ class LSTMBasedNetwork(tnn.Module):
         # Pass hidden states to fully connected layer
         output = self.fully_connected(state_out)
         # Take log(softmax) of the output
-        #output = tnn.functional.log_softmax(output, dim=1)
+        output = tnn.functional.log_softmax(output, dim=1)
         return output
 
 # Bi-directional LSTM
@@ -175,8 +181,6 @@ class BRNN(tnn.Module):
         # Initialise tensor with zeros
         state_out = torch.zeros(input.shape[0], self.hidden_size*2)
         # Loop through output of lstm and take the hidden state corresponding to the true length
-        print(output.shape)
-        print(state_out.shape)
         for index in range(input.shape[0]):
             state_out[index, :] = output[index, length[index] -1,:]
         # Pass hidden states to fully connected layer
@@ -193,9 +197,51 @@ class loss(tnn.Module):
 
     def __init__(self):
         super(loss, self).__init__()
+        self.myloss = tnn.CrossEntropyLoss()
+        self.myMSEloss = tnn.MSELoss()
 
     def forward(self, output, target):
-        pass
+        print("Input ===")
+        print(output)
+        print("Target ===")
+        print(target)
+        val = self.myMSEloss(output, target)
+        print(val)
+        return val
+
+class DirectMSEloss(tnn.Module):
+
+    def __init__(self):
+        super(DirectMSEloss, self).__init__()
+        self.myLoss = tnn.MSELoss()
+
+    def forward(self, output, target):
+        losses = torch.zeros(batchSize, requires_grad=True)
+        print("Input ===")
+        print(output)
+        print("Target ===")
+        print(target)
+        # Convert from one-hot back to labels (I know this is redundant)
+        y = target.argmax(dim=1, keepdim=True)
+        # Add one to get back to 1-5 range
+        y = torch.add(y, 1)
+
+        # Do same for predictions
+        x = output.argmax(dim=1, keepdim=True)
+        # Add one to get back to 1-5 range
+        x = torch.add(x, 1)
+
+        print("x ===== ")
+        print(x)
+        print("target =====")
+        print(y)
+        #val = tnn.functional.mse_loss(x.type(torch.FloatTensor), y.type(torch.FloatTensor))
+        #print("loss is = " + str(val))
+        with torch.no_grad():
+            for i in range(batchSize):
+                losses[i] = (x[i] - y[i])**2
+        print("loss is = " + str(torch.mean(losses)))
+        return torch.mean(losses)
 
 # Define the network to be used
 net = LSTMBasedNetwork()
@@ -203,14 +249,14 @@ net = LSTMBasedNetwork()
     Loss function for the model. You may use loss functions found in
     the torch package, or create your own with the loss class above.
 """
-lossFunc = tnn.CrossEntropyLoss()
+lossFunc = DirectMSEloss()
 
 ###########################################################################
 ################ The following determines training options ################
 ###########################################################################
 
 trainValSplit = 0.5
-batchSize = 64
+batchSize = 16
 epochs = 10
 # Use optimiser
 lr = 1.1
