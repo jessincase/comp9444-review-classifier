@@ -201,26 +201,19 @@ class loss(tnn.Module):
         self.myMSEloss = tnn.MSELoss()
 
     def forward(self, output, target):
-        print("Input ===")
-        print(output)
-        print("Target ===")
-        print(target)
         val = self.myMSEloss(output, target)
-        print(val)
         return val
 
 class DirectMSEloss(tnn.Module):
 
     def __init__(self):
         super(DirectMSEloss, self).__init__()
-        self.myLoss = tnn.MSELoss()
 
     def forward(self, output, target):
-        losses = torch.zeros(batchSize, requires_grad=True)
-        print("Input ===")
-        print(output)
-        print("Target ===")
-        print(target)
+        #print("Input ===")
+        #print(output)
+        #print("Target ===")
+        #print(target)
         # Convert from one-hot back to labels (I know this is redundant)
         y = target.argmax(dim=1, keepdim=True)
         # Add one to get back to 1-5 range
@@ -231,16 +224,48 @@ class DirectMSEloss(tnn.Module):
         # Add one to get back to 1-5 range
         x = torch.add(x, 1)
 
-        print("x ===== ")
-        print(x)
-        print("target =====")
-        print(y)
-        #val = tnn.functional.mse_loss(x.type(torch.FloatTensor), y.type(torch.FloatTensor))
-        #print("loss is = " + str(val))
+        #print("x ===== ")
+        #print(x)
+        #print("y =====")
+        #print(y)
+        # Calculate the MSE
+        losses = torch.zeros(x.shape[0], requires_grad=True)
         with torch.no_grad():
-            for i in range(batchSize):
+            for i in range(x.shape[0]):
                 losses[i] = (x[i] - y[i])**2
-        print("loss is = " + str(torch.mean(losses)))
+        #print("loss is = " + str(torch.mean(losses)))
+        return torch.mean(losses)
+
+class DirectMSEloss(tnn.Module):
+
+    def __init__(self):
+        super(DirectMSEloss, self).__init__()
+
+    def forward(self, output, target):
+        #print("Input ===")
+        #print(output)
+        #print("Target ===")
+        #print(target)
+        # Convert from one-hot back to labels (I know this is redundant)
+        y = target.argmax(dim=1, keepdim=True)
+        # Add one to get back to 1-5 range
+        y = torch.add(y, 1)
+
+        # Do same for predictions
+        x = output.argmax(dim=1, keepdim=True)
+        # Add one to get back to 1-5 range
+        x = torch.add(x, 1)
+
+        #print("x ===== ")
+        #print(x)
+        #print("y =====")
+        #print(y)
+        # Calculate the MSE
+        losses = torch.zeros(x.shape[0], requires_grad=True)
+        with torch.no_grad():
+            for i in range(x.shape[0]):
+                losses[i] = (x[i] - y[i])**2
+        #print("loss is = " + str(torch.mean(losses)))
         return torch.mean(losses)
 
 # Define the network to be used
@@ -256,10 +281,10 @@ lossFunc = DirectMSEloss()
 ###########################################################################
 
 trainValSplit = 0.5
-batchSize = 16
+batchSize = 64
 epochs = 10
 # Use optimiser
-lr = 1.1
-mom = 0.8
+lr = 4
+mom = 13
 # optimiser = toptim.Adam(net.parameters(),lr=lr)
 optimiser = toptim.SGD(net.parameters(), lr=lr, momentum=mom)
