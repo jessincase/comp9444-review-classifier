@@ -17,7 +17,30 @@ The variable device may be used to refer to the CPU/GPU being used by PyTorch.
 
 You may only use GloVe 6B word vectors as found in the torchtext package.
 """
+"""
+IMPLEMENTATION DETAILS
+We have an LSTM with 2 layers and hidden state size of 128, which takes an input word reprsentation of size 300.
+We used a LSTM to handle the varying input size as well as the long-term dependencies of the product reviews.
+This ensured that extraneous padding from the batches did not impact our results.
+We then added a fully connected linear layer at the end. The cross entropy loss function is used.
 
+Initially we created a CNN with 1 convolutional layer with 3 filters of size 3x100,4x100,5x100 with a relu activation function. 
+Then, global max-pool layer to account for padding and a fully connected layer with dropout and softmax [Kim et al 2014]. Loss function: cross entropy. 
+However, that gave us a weighted score of about 59-60~ and we thought we could do better with a LSTM.
+
+After we settled on the network architecture, we investigated different number of layers, hidden units and word representation dimensions.
+We explored different loss functions like cross entropy, NNLoss including writing our own. First we attempted to implement ordinal regression 
+by following a design from a paper "A Neural Network Approach to Ordinal Regression" [Cheng et al 2008]. We did this by applying sigmoid activation
+on the output nodes and changed the target encoding from hot one e.g [ 0 1 0 0 0 ] = 2 star to become [ 1 1 0 0 0 ]. 
+However, this ended up skewing our weights to favour 1-2 star output nodes. Eventually we abandoned this approach as we realised review star 
+classification is not multi-label ordinal regression.
+
+We then experimented with custom loss functions where we penalised predictions that were more distant i.e. 
+higher loss for predictions that were 2 stars away more than predictions that were 1 star away. We did this using a weighted Mean Square Error formula.
+We were not able to spend time training with this model although it did provide promising results. 
+Hence we settled on the cross entropy loss.
+
+"""
 import torch
 import torch.nn as tnn
 import torch.optim as toptim
@@ -81,9 +104,9 @@ def convertLabel(datasetLabel):
     oneHot = torch.zeros(convertedLabel.shape[0], 5)
     for index in range(oneHot.shape[0]):
         oneHot[index, convertedLabel[index]] = 1
-    #return convertedLabel # goes 0 to 4
+    return convertedLabel # goes 0 to 4
     #return datasetLabel # goes 1 to 5
-    return oneHot # one hot encoding
+    #return oneHot # one hot encoding
 
 def convertNetOutput(netOutput):
     """
@@ -151,7 +174,7 @@ class LSTMBasedNetwork(tnn.Module):
         # Pass hidden states to fully connected layer
         output = self.fully_connected(state_out)
         #output = tnn.functional.log_softmax(output, dim=1)
-        output = tnn.functional.softmax(output)
+        #output = tnn.functional.softmax(output)
         return output
 
 # Bi-directional LSTM
@@ -186,7 +209,7 @@ class BRNN(tnn.Module):
         # Pass hidden states to fully connected layer
         output = self.fully_connected(state_out)
         #output = tnn.functional.log_softmax(output, dim=1)
-        output = tnn.Softmax(output)
+        #output = tnn.Softmax(output)
         return output
 
 # Custom loss function
@@ -211,7 +234,6 @@ class WeightedMSELoss(tnn.Module):
 
     def forward(self, output, target):
         loss = (target - output)**2
-        weights = self.penaltyMatrix[torch.argmax(target,dim=1),:]
         loss = torch.mul(loss, self.penaltyMatrix[torch.argmax(target,dim=1),:])
         loss = torch.sum(loss, dim=1)
         return torch.mean(loss)
@@ -222,8 +244,8 @@ net = LSTMBasedNetwork()
     Loss function for the model. You may use loss functions found in
     the torch package, or create your own with the loss class above.
 """
-lossFunc = WeightedMSELoss()
-#lossFunc = tnn.CrossEntropyLoss()
+#lossFunc = WeightedMSELoss()
+lossFunc = tnn.CrossEntropyLoss()
 
 ###########################################################################
 ################ The following determines training options ################
@@ -231,7 +253,7 @@ lossFunc = WeightedMSELoss()
 
 trainValSplit = 0.8
 batchSize = 64
-epochs = 1
+epochs = 10
 # Use optimiser
 lr = 1.1
 mom = 0.8
