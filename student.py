@@ -94,7 +94,7 @@ def convertNetOutput(netOutput):
     values other than the five mentioned, convert the output here.
     """
     # Find index of max response, gives values 0-4
-    netOutput = netOutput.argmax(dim=1, keepdim=True)
+    netOutput = netOutput.dim.argmax(dim=1, keepdim=True)
     # Add one to get back to 1-5 range
     netOutput = torch.add(netOutput, 1)
     # Convert to float
