@@ -37,8 +37,6 @@ classification is not multi-label ordinal regression.
 
 We then experimented with custom loss functions where we penalised predictions that were more distant i.e. 
 higher loss for predictions that were 2 stars away more than predictions that were 1 star away. We did this using a weighted Mean Square Error formula.
-We were not able to spend time training with this model although it did provide promising results. 
-Hence we settled on the cross entropy loss.
 
 """
 import torch
@@ -104,9 +102,8 @@ def convertLabel(datasetLabel):
     oneHot = torch.zeros(convertedLabel.shape[0], 5)
     for index in range(oneHot.shape[0]):
         oneHot[index, convertedLabel[index]] = 1
-    return convertedLabel # goes 0 to 4
-    #return datasetLabel # goes 1 to 5
-    #return oneHot # one hot encoding
+        
+    return oneHot # one hot encoding
 
 def convertNetOutput(netOutput):
     """
@@ -122,25 +119,12 @@ def convertNetOutput(netOutput):
     netOutput = torch.add(netOutput, 1)
     # Convert to float
     netOutput = netOutput.float()
+    
     return netOutput
 
 ###########################################################################
 ################### The following determines the model ####################
 ###########################################################################
-
-class network(tnn.Module):
-    """
-    Class for creating the neural network.  The input to your network
-    will be a batch of reviews (in word vector form).  As reviews will
-    have different numbers of words in them, padding has been added to the
-    end of the reviews so we can form a batch of reviews of equal length.
-    """
-
-    def __init__(self):
-        super(network, self).__init__()
-
-    def forward(self, input, length):
-        pass
 
 # Basic LSTM
 class LSTMBasedNetwork(tnn.Module):
@@ -173,43 +157,7 @@ class LSTMBasedNetwork(tnn.Module):
             state_out[index, :] = output[index, length[index] -1,:]
         # Pass hidden states to fully connected layer
         output = self.fully_connected(state_out)
-        #output = tnn.functional.log_softmax(output, dim=1)
-        #output = tnn.functional.softmax(output)
-        return output
-
-# Bi-directional LSTM
-class BRNN(tnn.Module):
-    def __init__(self):
-        super(BRNN, self).__init__()
-        # Define parameters
-        # Input size is equivalent to the GloVe dimension
-        self.input_size = 300
-        self.num_layers = 2
-        self.hidden_size = 128
-        self.num_classes = 5
-        # Define network components
-        self.lstm = tnn.LSTM(self.input_size, self.hidden_size, self.num_layers,
-                            batch_first=True, bidirectional=True)
-        self.fully_connected = tnn.Linear(self.hidden_size*2, self.num_classes)
-
-    def forward(self, input, length):
-        # Input is of shape (batchSize, maxLengthInBatch, wordEmbeddingDim)
-        # length provides the 'true' length of the sentence
-        # Initialise the hidden and cell state
-        h0 = torch.zeros(self.num_layers*2, input.shape[0], self.hidden_size).to(device)
-        c0 = torch.zeros(self.num_layers*2, input.shape[0], self.hidden_size).to(device)
-        # Run the model
-        output, _ = self.lstm(input, (h0, c0))
-        # Take the hidden state based on the true length of the sentences
-        # Initialise tensor with zeros
-        state_out = torch.zeros(input.shape[0], self.hidden_size*2)
-        # Loop through output of lstm and take the hidden state corresponding to the true length
-        for index in range(input.shape[0]):
-            state_out[index, :] = output[index, length[index] -1,:]
-        # Pass hidden states to fully connected layer
-        output = self.fully_connected(state_out)
-        #output = tnn.functional.log_softmax(output, dim=1)
-        #output = tnn.Softmax(output)
+        
         return output
 
 # Custom loss function
@@ -236,6 +184,7 @@ class WeightedMSELoss(tnn.Module):
         loss = (target - output)**2
         loss = torch.mul(loss, self.penaltyMatrix[torch.argmax(target,dim=1),:])
         loss = torch.sum(loss, dim=1)
+        
         return torch.mean(loss)
 
 # Define the network to be used
@@ -244,8 +193,7 @@ net = LSTMBasedNetwork()
     Loss function for the model. You may use loss functions found in
     the torch package, or create your own with the loss class above.
 """
-#lossFunc = WeightedMSELoss()
-lossFunc = tnn.CrossEntropyLoss()
+lossFunc = WeightedMSELoss()
 
 ###########################################################################
 ################ The following determines training options ################
