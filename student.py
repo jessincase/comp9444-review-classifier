@@ -145,7 +145,7 @@ class LSTMBasedNetwork(tnn.Module):
         # Pass hidden states to fully connected layer
         output = self.fully_connected(state_out)
         # Take log(softmax) of the output
-        output = tnn.functional.log_softmax(output, dim=1)
+        #output = tnn.functional.log_softmax(output, dim=1)
         return output
 
 # Bi-directional LSTM
@@ -154,9 +154,9 @@ class BRNN(tnn.Module):
         super(BRNN, self).__init__()
         # Define parameters
         # Input size is equivalent to the GloVe dimension
-        self.input_size = 50
+        self.input_size = 300
         self.num_layers = 2
-        self.hidden_size = 256
+        self.hidden_size = 128
         self.num_classes = 5
         # Define network components
         self.lstm = tnn.LSTM(self.input_size, self.hidden_size, self.num_layers,
@@ -173,14 +173,16 @@ class BRNN(tnn.Module):
         output, _ = self.lstm(input, (h0, c0))
         # Take the hidden state based on the true length of the sentences
         # Initialise tensor with zeros
-        state_out = torch.zeros(input.shape[0], self.hidden_size)
+        state_out = torch.zeros(input.shape[0], self.hidden_size*2)
         # Loop through output of lstm and take the hidden state corresponding to the true length
+        print(output.shape)
+        print(state_out.shape)
         for index in range(input.shape[0]):
             state_out[index, :] = output[index, length[index] -1,:]
         # Pass hidden states to fully connected layer
         output = self.fully_connected(state_out)
         # Take log(softmax) of the output
-        output = tnn.functional.log_softmax(output, dim=1)
+        #output = tnn.functional.log_softmax(output, dim=1)
         return output
 
 class loss(tnn.Module):
@@ -207,7 +209,7 @@ lossFunc = tnn.CrossEntropyLoss()
 ################ The following determines training options ################
 ###########################################################################
 
-trainValSplit = 0.8
+trainValSplit = 0.5
 batchSize = 64
 epochs = 10
 # Use optimiser
