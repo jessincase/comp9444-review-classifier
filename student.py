@@ -212,21 +212,14 @@ class DirectMSEloss(tnn.Module):
         super(DirectMSEloss, self).__init__()
 
     def forward(self, output, target):
-        # Convert from one-hot back to labels (I know this is redundant)
-        y = target.argmax(dim=1, keepdim=True)
-        # Add one to get back to 1-5 range
-        y = torch.add(y, 1)
-
-        # Do same for predictions
-        x = output.argmax(dim=1, keepdim=True)
-        # Add one to get back to 1-5 range
-        x = torch.add(x, 1)
+        # Get predictions
+        x = output.dim.argmax(dim=1, keepdim=True)
 
         # Calculate the MSE
         losses = torch.zeros(x.shape[0], requires_grad=True)
         with torch.no_grad():
             for i in range(x.shape[0]):
-                losses[i] = (x[i] - y[i])**2
+                losses[i] = (x[i] - target[i])**2
         return torch.mean(losses)
 
 class WeightedMSELoss(tnn.Module):
@@ -235,12 +228,13 @@ class WeightedMSELoss(tnn.Module):
         super(WeightedMSELoss, self).__init__()
         # Weighting based on star distance
         self.distancePenalties = [1, 2, 3, 4, 5]
-        # Make this into a matrix for fast computation
+        # Make this into a matrix for faster computation
         self.penaltyMatrix = torch.zeros(5,5)
         for rating in range(5):
             for distance in range(5):
                 relativeDistance = abs(distance - rating)
                 self.penaltyMatrix[rating, distance] = self.distancePenalties[relativeDistance]
+        # Create oneHot matrix for faster computation
         self.oneHot = torch.zeros(5,5)
         for i in range(5):
             for j in range(5):
@@ -251,14 +245,6 @@ class WeightedMSELoss(tnn.Module):
 
 
     def forward(self, output, target):
-        # Output values should be probabilities
-        #print("Network output === should be probabilities")
-        #print(output)
-        
-        # Target values should be from 0 to 4
-        #print("Target === should be from 0 to 4")
-        #print(target)
-
         # Calculate the weighted MSE
         losses = torch.zeros(target.shape[0], requires_grad=True)
         # If using softmax layer, weighted MSE = batchSum(sum(pi*(xi-yi)**2))
@@ -286,7 +272,7 @@ lossFunc = WeightedMSELoss()
 
 trainValSplit = 0.5
 batchSize = 64
-epochs = 10
+epochs = 1
 # Use optimiser
 lr = 1.1
 mom = 0.8
