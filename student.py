@@ -81,8 +81,8 @@ def convertLabel(datasetLabel):
     oneHot = torch.zeros(convertedLabel.shape[0], 5)
     for index in range(oneHot.shape[0]):
         oneHot[index, convertedLabel[index]] = 1
-    #return convertedLabel # goes 0 to 4
-    return oneHot # one hot encoding
+    return convertedLabel # goes 0 to 4
+    #return oneHot # one hot encoding
     #return datasetLabel # goes 1 to 5
 
 def convertNetOutput(netOutput):
@@ -151,7 +151,8 @@ class LSTMBasedNetwork(tnn.Module):
         # Pass hidden states to fully connected layer
         output = self.fully_connected(state_out)
         # Take log(softmax) of the output
-        output = tnn.functional.log_softmax(output, dim=1)
+        #output = tnn.functional.log_softmax(output, dim=1)
+        output = tnn.Softmax(output)
         return output
 
 # Bi-directional LSTM
@@ -187,6 +188,7 @@ class BRNN(tnn.Module):
         output = self.fully_connected(state_out)
         # Take log(softmax) of the output
         #output = tnn.functional.log_softmax(output, dim=1)
+        output = tnn.Softmax(output)
         return output
 
 class loss(tnn.Module):
@@ -210,10 +212,6 @@ class DirectMSEloss(tnn.Module):
         super(DirectMSEloss, self).__init__()
 
     def forward(self, output, target):
-        #print("Input ===")
-        #print(output)
-        #print("Target ===")
-        #print(target)
         # Convert from one-hot back to labels (I know this is redundant)
         y = target.argmax(dim=1, keepdim=True)
         # Add one to get back to 1-5 range
@@ -224,48 +222,54 @@ class DirectMSEloss(tnn.Module):
         # Add one to get back to 1-5 range
         x = torch.add(x, 1)
 
-        #print("x ===== ")
-        #print(x)
-        #print("y =====")
-        #print(y)
         # Calculate the MSE
         losses = torch.zeros(x.shape[0], requires_grad=True)
         with torch.no_grad():
             for i in range(x.shape[0]):
                 losses[i] = (x[i] - y[i])**2
-        #print("loss is = " + str(torch.mean(losses)))
         return torch.mean(losses)
 
-class DirectMSEloss(tnn.Module):
+class WeightedMSELoss(tnn.Module):
 
     def __init__(self):
-        super(DirectMSEloss, self).__init__()
+        super(WeightedMSELoss, self).__init__()
+        # Weighting based on star distance
+        self.distancePenalties = [1, 2, 3, 4, 5]
+        # Make this into a matrix for fast computation
+        self.penaltyMatrix = torch.zeros(5,5)
+        for rating in range(5):
+            for distance in range(5):
+                relativeDistance = abs(distance - rating)
+                self.penaltyMatrix[rating, distance] = self.distancePenalties[relativeDistance]
+        self.oneHot = torch.zeros(5,5)
+        for i in range(5):
+            for j in range(5):
+                if (i == j):
+                    self.oneHot[i,j] = 1
+                else:
+                    self.oneHot[i,j] = 0
+
 
     def forward(self, output, target):
-        #print("Input ===")
+        # Output values should be probabilities
+        #print("Network output === should be probabilities")
         #print(output)
-        #print("Target ===")
+        
+        # Target values should be from 0 to 4
+        #print("Target === should be from 0 to 4")
         #print(target)
-        # Convert from one-hot back to labels (I know this is redundant)
-        y = target.argmax(dim=1, keepdim=True)
-        # Add one to get back to 1-5 range
-        y = torch.add(y, 1)
 
-        # Do same for predictions
-        x = output.argmax(dim=1, keepdim=True)
-        # Add one to get back to 1-5 range
-        x = torch.add(x, 1)
-
-        #print("x ===== ")
-        #print(x)
-        #print("y =====")
-        #print(y)
-        # Calculate the MSE
-        losses = torch.zeros(x.shape[0], requires_grad=True)
+        # Calculate the weighted MSE
+        losses = torch.zeros(target.shape[0], requires_grad=True)
+        # If using softmax layer, weighted MSE = batchSum(sum(pi*(xi-yi)**2))
         with torch.no_grad():
-            for i in range(x.shape[0]):
-                losses[i] = (x[i] - y[i])**2
-        #print("loss is = " + str(torch.mean(losses)))
+            for index in range(target.shape[0]):
+                # Take difference and square
+                loss = torch.pow(self.oneHot[target[index],:] - output.dim[index,:], 2)
+                # Multiply with weights
+                loss = torch.mul(loss, self.penaltyMatrix[target[index],:])
+                # And sum
+                losses[index] = torch.sum(loss)
         return torch.mean(losses)
 
 # Define the network to be used
@@ -274,7 +278,7 @@ net = LSTMBasedNetwork()
     Loss function for the model. You may use loss functions found in
     the torch package, or create your own with the loss class above.
 """
-lossFunc = DirectMSEloss()
+lossFunc = WeightedMSELoss()
 
 ###########################################################################
 ################ The following determines training options ################
@@ -284,7 +288,7 @@ trainValSplit = 0.5
 batchSize = 64
 epochs = 10
 # Use optimiser
-lr = 4
-mom = 13
+lr = 1.1
+mom = 0.8
 # optimiser = toptim.Adam(net.parameters(),lr=lr)
 optimiser = toptim.SGD(net.parameters(), lr=lr, momentum=mom)
